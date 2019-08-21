@@ -4,6 +4,8 @@
 
 ## Notes
 
+This package downloads a pre-built TensorFlow model for image recognition.
+
 ### image_recognition.py
 
 ```python

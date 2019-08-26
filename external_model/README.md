@@ -157,7 +157,6 @@ Here you basically copy it from the repo we give you **course_tflow_image_studen
 Ok, you can now execute the **python script generate_tfrecord.py**
 
 ```bash
-roscd tf_unit1_pkg/scripts
 python scripts/generate_tfrecord_n.py --image_path_input=images/train --csv_input=data/train_labels.csv  --output_path=data/train.record
 python scripts/generate_tfrecord_n.py --image_path_input=images/test --csv_input=data/test_labels.csv  --output_path=data/test.record
 ```
@@ -179,4 +178,116 @@ rm tfrecord_inspector.log
 python scripts/tfrecord_inspector.py >> tfrecord_inspector.log
 ```
 
-You can then read the **tfrecord_inspector.log** file. Beware that this can be a very big file because it also contains the pixel image data. We recommend that you use VIM to open it, it's the fastest way and it doesn't open all the data at once.
+You can then read the **tfrecord_inspector.log** file. Beware that this can be a very big file because it also contains the pixel image data.
+
+## Step 3: Copy Model Data for Training
+
+To train, you need a **TensorFlow** model. This is made by a series of files that define the different DeepLearing Neural Network operations. You can find loads of models; some are **faster** than others, some are **more precise** and change depending on their application. Some are just for images, others for sound, still others for stockmarket data... You name it.
+
+```bash
+# We clean up previous images
+rm -rf ./models/research/object_detection/images
+
+cp -a data/. ./models/research/object_detection/data
+cp -r images ./models/research/object_detection/
+cp -r training ./models/research/object_detection/
+
+# Copy Selected model from the user
+cp -r course_tflow_image_student_data/tf_models/ssd_mobilenet_v1_coco_11_06_2017 ./models/research/object_detection/
+cp course_tflow_image_student_data/tf_models/ssd_mobilenet_v1_coco.config ./models/research/object_detection/training/
+```
+
+Here you are copying the **ssd_mobilenet_v1_coco.config** file and the **ssd_mobilenet_v1_coco_11_06_2017.tar.gz**. The .tar.gz contains the binary information of the model, used by TensorFlow. It's more complex than that, but it's not necessary to know for now.
+The **.config** file **IS** important to know because here you will have to change some elements to indicate where to extract the TensorFlow model from, how many labels you have, the basic size of the training images... It configures all of the aspects of the training procedure. We are going to just comment on the essentials. Open the **ssd_mobilenet_v1_coco.config** in the IDE:
+
+* Number Of Classes: How many labels you have; in our case, ONE, mira_robot.
+
+```
+model {
+  ssd {
+    num_classes: 1
+```
+
+* fine_tune_checkpoint: Here you state the model file path. In our case, ssd_mobilenet_v1_coco_11_06_2017/model.ckpt.
+
+```
+}
+  fine_tune_checkpoint: "ssd_mobilenet_v1_coco_11_06_2017/model.ckpt"
+```
+
+* Batch Size: How many images are used in each training step. If you have RAM memory problems, you have to **LOWER** this value. The minimum is, of course, 1. But the lower it is , the slower you will train.
+
+```
+train_config: {
+  batch_size: 1
+```
+
+* Data Record File Paths and Label file PBTXT: Where to get the training and test image data, and also the labels list (which is extracted from the **object-detection.pbtxt** file that you are going to create now).
+
+```
+train_input_reader: {
+  tf_record_input_reader {
+    input_path: "data/train.record"
+  }
+  label_map_path: "training/object-detection.pbtxt"
+​
+
+eval_config: {
+  num_examples: 8000
+  # Note: The below line limits the evaluation process to 10 evaluations.
+  # Remove the below line to evaluate indefinitely.
+  max_evals: 10
+}
+​
+eval_input_reader: {
+  tf_record_input_reader {
+    input_path: "data/test.record"
+  }
+  label_map_path: "training/object-detection.pbtxt"
+  shuffle: false
+  num_readers: 1
+}
+```
+
+At the end, the **ssd_mobilenet_v1_coco.config** should look like the one in the public git, inside the **tf_models** folder. It is advisable that you always download the files from the official source though, just in case there was an improvement.
+
+## Step 4: Create the Label List file object-detection.pbtxt
+
+So, let's create this file called **object-detection.pbtxt**. Here you will state the labels for your training and the **ID** associated with it.
+
+Lets have a look at this **generate_pbtxt_file.py** file. Of course you can generate this **pbtxt** file by hand, but the **generate_pbtxt_file.py** will give you the power to then change the number of labels much easier.
+
+```
+roscd tf_unit1_pkg
+rm -rf training
+mkdir training
+python scripts/generate_pbtxt_file.py
+```
+
+## Step 5: It's Time to Train!¶
+Now, it's the moment of truth. We have to start the training process and cross our fingers that everything was set up correctly.
+
+Check that the object_detection module is inside the python path.
+If you are launching this in a new WebShell, or you are restarting from here, the python path won't have it.
+**THIS IS A SOURCE OF ERRORS**, so please make sure to check it.
+
+```bash
+roscd tf_unit1_pkg
+cd models/research
+export PYTHONPATH=$PYTHONPATH:`pwd`:`pwd`/slim
+echo $PYTHONPATH
+```
+
+### And now, start the training.
+```bash
+roscd tf_unit1_pkg
+cd models/research/object_detection
+# We set it so that train.py can find object_recognition
+python train.py --logtostderr --train_dir=training/ --pipeline_config_path=training/ssd_mobilenet_v1_coco.config
+```
+
+If all went well, you should see that it starts to output the step times. That means it's training.
+
+If the scripts gets killed, it means that you chose a **batch_size** that was too big for the processing power you have. Lower it in the ssd_mobilenet_v1_coco.config and try again. Also, using a lot of training images might kill the process as well, so again, remove some of the images, redo the previous steps, and try again.
+
+You can also monitor the system load by executing **top** or **htop** (this last one has more colours). Here you can see the load average and the RAM memory used.

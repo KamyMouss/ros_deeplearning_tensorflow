@@ -291,3 +291,97 @@ If all went well, you should see that it starts to output the step times. That m
 If the scripts gets killed, it means that you chose a **batch_size** that was too big for the processing power you have. Lower it in the ssd_mobilenet_v1_coco.config and try again. Also, using a lot of training images might kill the process as well, so again, remove some of the images, redo the previous steps, and try again.
 
 You can also monitor the system load by executing **top** or **htop** (this last one has more colours). Here you can see the load average and the RAM memory used.
+
+## Step 6: Use TensorBoard to check the training progress
+
+You can start the **TensorBoard** client and monitor the training progress. Just run the following commands in another WebShell:
+
+```bash
+# Activate tensorboard:
+roscd tf_unit1_pkg
+cd scripts/models/research/object_detection
+tensorboard --logdir=training/
+```
+
+Then, connect the TensorBoard client to your browser, as explained previously, and get the IP, like this:
+
+```
+public_ip
+```
+
+And after about **2 hours**, you should have something similar to this. As you can see, the **TotalLoss** has stabilised around the **1.00** value. That's considered to be a model that has already learned and won't get any better. But, basically, you have to stop the learning process when the **TotalLoss** stabilises and mantains its value. Otherwise, you might **overtrain** your model, which is not recommended.
+
+## Step 7: Export Inference Graph
+The training process generates an **inference graph** at the end. This graph is a file that you will use to load it and make predictions and detections of the objects on a scene, in real time. This makes sense because you only have to do the training once, and then use that knowledge.
+
+The first thing to do is export the files to your **scripts folder** for ease of use:
+
+```bash
+roscd tf_unit1_pkg
+cd models/research
+export PYTHONPATH=$PYTHONPATH:`pwd`:`pwd`/slim
+echo $PYTHONPATH
+
+roscd tf_unit1_pkg
+python scripts/extract_newest_ckpt_name.py models/research/object_detection/training/ newest_ckpt.txt
+index_newest_ckpt=`cat newest_ckpt.txt`
+    
+cd models/research/object_detection/
+rm -rf learned_model
+echo "NewestVersion=="$index_newest_ckpt
+
+
+python export_inference_graph.py \
+    --input_type image_tensor \
+    --pipeline_config_path training/$model_config_file_name \
+    --trained_checkpoint_prefix training/model.ckpt-$index_newest_ckpt \
+    --output_directory learned_model
+ls learned_model
+
+roscd tf_unit1_pkg
+rm -rf learned_model
+cp -r models/research/object_detection/learned_model ./
+```
+
+See the **index_newest_ckpt** string in one command? This number is replaced by the **last model version** from the training. To know that, the **extract_newest_ckpt_name.py** file was executed.
+
+```bash
+roscd tf_unit1_pkg/scripts
+cd models/research/object_detection
+ls training
+```
+
+This **extract_newest_ckpt_name.py** file will go instide the **models/research/object_detection/training** folder, and get the **ckpt** file with the highest number. This will we used for the generation of a **frozen-model** named **learned_model**.
+
+## Step 8: Copy Validation Images
+We also copy validation images into the **test_images** folder, inside **object_detection**, to launch a validation script afterwards. This is crucial to see how well our model does with images that it hasn't seen before.
+
+```bash
+# We copy and rename the images inside test to the test_images dir
+# I did it manually
+roscd tf_unit1_pkg
+cp -a course_tflow_image_student_data/validation_images/. models/research/object_detection/test_images
+```
+
+These images are ones that haven't been used in the training or the testing. They don't even have any Mira inside. This is just to test how well they perform in unknown situations.
+
+## Step 9: Launch the Testing Training Script
+Now, we have to use these **validation images** to test the model. To do so, you have to launch this script: **validate_learning.py**.
+
+```python
+TEST_IMAGE_PATHS = [ os.path.join(final_path_to_test_img, 'image{}.jpg'.format(i)) for i in range(1, 6) ]
+```
+
+This line specifies the range of images from the validation folder, which were copied into the **test_images**. They have to all be named something similar to **imageNumber.jpg**. And if you have a range from 1-5,then you have to state **range(1,5+1)**.
+
+Now, you can execute the script:
+
+```bash
+# We copy and rename the images inside test to the test_images dir
+# I did it manually
+roscd tf_unit1_pkg
+pwd_now=$(pwd)
+python ./scripts/validate_learning.py $pwd_now $pwd_now"/learned_model" $pwd_now"/models/research/object_detection/test_images"
+```
+
+You should now see the **validations images** appear one by one. As you may see, not all of them are correctly classified. But that's where adding more images and different modules comes into play.

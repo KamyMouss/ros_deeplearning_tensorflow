@@ -385,3 +385,20 @@ python ./scripts/validate_learning.py $pwd_now $pwd_now"/learned_model" $pwd_now
 ```
 
 You should now see the **validations images** appear one by one. As you may see, not all of them are correctly classified. But that's where adding more images and different modules comes into play.
+
+## Step 10: Launch the Testing Training Script
+And here comes the ROS connection again. So, what we want is for our robot, Mira, to recognise itself in the virtual world. And perhaps in the **real world**. So, we have to make recognitions in real time.
+
+The script **search_for_mira_robot.py** is a combination of the **test_training.py** and the **image_recognition.py** from earlier.
+
+Use the launch file **start_search_mira_robot.launch** to launch it, with the following command:
+
+```
+roslaunch tf_unit1_pkg start_search_mira_robot.launch
+```
+
+### Conclusions:
+You probably have seen that teaching this model only ONE thing has led to making it an object recogniser, rather than having the ability to differentiate between mira_robot and everything else.
+
+So, now you have to make Mira Robot **differentiate** between **mira_robots** and **other objects**.
+This means that you will have to train with **TWO** labels. Therefore, you will have to make all of the necessary modifications so that it trains with the label **mira_robot** and the label **object**.
